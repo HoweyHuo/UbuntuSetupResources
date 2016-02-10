@@ -381,7 +381,14 @@
 # -------------------------------------------------------------------------
 # --------------------------READ THE URL ABOVE!----------------------------
 # -------------------------------------------------------------------------
-
+### BEGIN INIT INFO
+# Provides: transparentproxy
+# Required-Start:    $local_fs $syslog $remote_fs dbus
+# Required-Stop:     $local_fs $syslog $remote_fs
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Start transparentproxy
+### END INIT INFO
 # Port Maps
 # TCP
 # 22          = SSH
