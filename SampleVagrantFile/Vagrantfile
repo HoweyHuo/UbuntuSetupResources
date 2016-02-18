@@ -5,6 +5,42 @@
 # configures the configuration version (we support older styles for
 # backwards compatibility). Please don't change it unless you know what
 # you're doing.
+disk = '/home/howeyhuo/Work/openstack-manual/disks/controller-disk-02.vdi'
+
+# this initscript will be run as provisioning script
+$initscript = <<SCRIPT
+logger "set hostname to controller01"
+hostnamectl set-hostname controller01va
+logger "format second drive"
+sudo mkfs.ext4 /dev/sdb
+logger "mound /dev/sdb to /opt"
+sudo chown vagrant:vagrant /etc/fstab
+sudo chmod 755 /etc/fstab
+sudo echo "/dev/sdb /opt ext4 rw 0 0" >> /etc/fstab
+sudo chown root:root /etc/fstab
+sudo chmod 644 /etc/fstab
+logger "run mount -av"
+sudo mount -av
+lsblk
+logger "Copy Credential to authorized key for user vagrant"
+sudo cat /vagrant/howeyhuo1_ssh_key.pem.pub >> ~/.ssh/authorized_keys
+logger "add rc.firewall to /etc/init.d"
+sudo cp /vagrant/rc.firewall /etc/init.d
+logger "Change mode of rc.firewall to 755"
+sudo chmod 755 /etc/init.d/rc.firewall
+logger "Change owner of rc.firewall to root"
+sudo chown root:root /etc/init.d/rc.firewall
+logger "set rc.firewall to run by defaults"
+sudo update-rc.d rc.firewall defaults
+logger "install ntp"
+sudo apt-get -y install ntp
+sudo cp /vagrant/ntp.conf /etc/
+sudo service ntp restart
+logger "display ip address of ifconfig"
+ifconfig
+SCRIPT
+
+
 Vagrant.configure(2) do |config|
   # The most common configuration options are documented and commented below.
   # For a complete reference, please see the online documentation at
@@ -12,9 +48,8 @@ Vagrant.configure(2) do |config|
 
   # Every Vagrant development environment requires a box. You can search for
   # boxes at https://atlas.hashicorp.com/search.
-  config.vm.box = "ubuntu-vivid-15.04"
-  config.vm.box_url = "https://cloud-images.ubuntu.com/vagrant/vivid/current/vivid-server-cloudimg-amd64-vagrant-disk1.box"
-
+  config.vm.box = "ubuntu-wily-15.10"
+  config.vm.box_url = "https://cloud-images.ubuntu.com/vagrant/wily/current/wily-server-cloudimg-amd64-vagrant-disk1.box"
   # Disable automatic box update checking. If you disable this, then
   # boxes will only be checked for updates when the user runs
   # `vagrant box outdated`. This is not recommended.
@@ -25,15 +60,14 @@ Vagrant.configure(2) do |config|
   # accessing "localhost:8080" will access port 80 on the guest machine.
   # config.vm.network "forwarded_port", guest: 80, host: 8080
 
-  # Create a private network, which allows host-only access to the machine
-  # using a specific IP.
-  config.vm.network "private_network", ip: "192.168.42.1",  virtualbox__intnet: "devstack_network" 
-
   # Create a public network, which generally matched to bridged network.
   # Bridged networks make the machine appear as another physical device on
   # your network.
-  config.vm.network "public_network", bridge: "wlo1", 
-         use_dhcp_assigned_default_route: true
+  config.vm.network "public_network", bridge: "wlo1", use_dhcp_assigned_default_route: true
+
+  # Create a private network, which allows host-only access to the machine
+  # using a specific IP.
+  config.vm.network "private_network", ip: "192.168.42.1", virtualbox__intnet: "openstack_network"
 
   # Share an additional folder to the guest VM. The first argument is
   # the path on the host to the actual folder. The second argument is
@@ -50,7 +84,15 @@ Vagrant.configure(2) do |config|
   #   vb.gui = true
   #
   #   # Customize the amount of memory on the VM:
-      vb.memory = "2048"
+      vb.name = "manual-openstack-controller"
+      vb.customize ["modifyvm", :id, "--cpus", "2"]
+      vb.customize ["modifyvm", :id, "--memory", "8192"]
+      vb.customize ["modifyvm", :id, "--nicpromisc2", "allow-all"]
+      vb.customize ["modifyvm", :id, "--nicpromisc3", "allow-all"]
+      unless File.exist?(disk)
+        vb.customize ['createhd', '--filename', disk, '--size', 100 * 1024]
+      end
+      vb.customize ['storageattach', :id, '--storagectl', 'SATAController', '--port', 1, '--device', 0, '--type', 'hdd', '--medium', disk]
   end
   #
   # View the documentation for the provider you are using for more
@@ -66,10 +108,8 @@ Vagrant.configure(2) do |config|
   # Enable provisioning with a shell script. Additional provisioners such as
   # Puppet, Chef, Ansible, Salt, and Docker are also available. Please see the
   # documentation for more information about their specific syntax and use.
-  config.vm.provision "shell", inline: <<-SHELL
-     sudo apt-get update
-     # Add access private access key for vagrant user
-     echo /vagrant/howeyhuo1_ssh_key.pem.pub >> ~/.ssh/authorized_keys
-  #   sudo apt-get install -y apache2
-  SHELL
+  config.vm.provision "shell", type: "shell" do |s|
+    s.privileged = false
+    s.inline = $initscript
+  end
 end
