@@ -1,0 +1,9 @@
+#!/usr/bin/expect -f
+set newpwd [lindex $argv 0]
+spawn sudo mysql_secure_installation
+expect "*Enter current password for root (enter for none):" 
+send "\r"
+expect "*Set root password? [Y/n]" 
+send "Y\r"
+
+interact
